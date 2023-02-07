@@ -17,28 +17,24 @@
  */
 package xdev.db.informix.jdbc;
 
-
-
-
 import xdev.db.DBException;
 import xdev.db.jdbc.JDBCDataSource;
 
 
 public class InformixJDBCDataSource extends JDBCDataSource<InformixJDBCDataSource, InformixDbms>
 {
-	public final static Parameter<String>	INFORMIXSERVER;
+	public final static Parameter<String> INFORMIXSERVER;
+	
 	static
 	{
-		INFORMIXSERVER = new Parameter("INFORMIXSERVER","informixserver");
+		INFORMIXSERVER = new Parameter("INFORMIXSERVER", "informixserver");
 	}
-	
 	
 	public InformixJDBCDataSource()
 	{
 		super(new InformixDbms());
-		getDbmsAdaptor().setDataSource(this);
+		this.getDbmsAdaptor().setDataSource(this);
 	}
-	
 	
 	@Override
 	public Parameter[] getDefaultParameters()
@@ -57,28 +53,25 @@ public class InformixJDBCDataSource extends JDBCDataSource<InformixJDBCDataSourc
 		};
 	}
 	
-	
 	@Override
 	protected InformixConnectionInformation getConnectionInformation()
 	{
 		return new InformixConnectionInformation(
-			getHost(),
-			getPort(),
-			getUserName(),
-			getPassword().getPlainText(),
-			getCatalog(),
-			getInformixServer(),
-			getUrlExtension(),
-			getDbmsAdaptor()
+			this.getHost(),
+			this.getPort(),
+			this.getUserName(),
+			this.getPassword().getPlainText(),
+			this.getCatalog(),
+			this.getInformixServer(),
+			this.getUrlExtension(),
+			this.getDbmsAdaptor()
 		);
 	}
 	
-	
 	public String getInformixServer()
 	{
-		return getParameterValue(INFORMIXSERVER);
+		return this.getParameterValue(INFORMIXSERVER);
 	}
-	
 	
 	@Override
 	public InformixJDBCConnection openConnectionImpl() throws DBException
@@ -86,13 +79,11 @@ public class InformixJDBCDataSource extends JDBCDataSource<InformixJDBCDataSourc
 		return new InformixJDBCConnection(this);
 	}
 	
-	
 	@Override
 	public InformixJDBCMetaData getMetaData() throws DBException
 	{
 		return new InformixJDBCMetaData(this);
 	}
-	
 	
 	@Override
 	public boolean canExport()

@@ -17,9 +17,6 @@
  */
 package xdev.db.informix.jdbc;
 
-
-
-
 import com.xdev.jadoth.sqlengine.dbms.DbmsSyntax;
 
 
@@ -27,7 +24,6 @@ public class InformixSyntax extends DbmsSyntax.Implementation<InformixDbms>
 {
 	protected InformixSyntax()
 	{
-		super(wordSet(),wordSet());
+		super(wordSet(), wordSet());
 	}
-	
 }

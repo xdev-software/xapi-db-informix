@@ -17,50 +17,44 @@
  */
 package xdev.db.informix.jdbc;
 
-
-
-
 import java.sql.Connection;
 
 import com.xdev.jadoth.sqlengine.dbms.DbmsConnectionInformation;
 
 import xdev.db.ConnectionInformation;
+
+
 public class InformixConnectionInformation extends ConnectionInformation<InformixDbms>
 {
-	private String	informixServer;
-	
+	private String informixServer;
 	
 	// /////////////////////////////////////////////////////////////////////////
 	// constructors //
 	// ///////////////////
 	
 	/**
-	 * @param user
-	 *            the user
-	 * @param password
-	 *            the password
-	 * @param database
-	 *            the database
-	 * @param urlExtension
-	 *            the extended url properties
-	 * @param dbmsAdaptor
-	 *            the dbms adaptor
+	 * @param user         the user
+	 * @param password     the password
+	 * @param database     the database
+	 * @param urlExtension the extended url properties
+	 * @param dbmsAdaptor  the dbms adaptor
 	 */
-	public InformixConnectionInformation(final String host, final int port, final String user,
-			final String password, final String database, final String informixServer,
-			final String urlExtension, final InformixDbms dbmsAdaptor)
+	public InformixConnectionInformation(
+		final String host, final int port, final String user,
+		final String password, final String database, final String informixServer,
+		final String urlExtension, final InformixDbms dbmsAdaptor)
 	{
-		super(host,port,user,password,database,urlExtension,dbmsAdaptor);
+		super(host, port, user, password, database, urlExtension, dbmsAdaptor);
 		this.informixServer = informixServer;
 	}
-	
 	
 	// /////////////////////////////////////////////////////////////////////////
 	// getters //
 	// ///////////////////
+	
 	/**
 	 * Gets the database.
-	 * 
+	 *
 	 * @return the database
 	 */
 	public String getDatabase()
@@ -68,37 +62,34 @@ public class InformixConnectionInformation extends ConnectionInformation<Informi
 		return this.getCatalog();
 	}
 	
-	
 	// /////////////////////////////////////////////////////////////////////////
 	// setters //
 	// ///////////////////
+	
 	/**
 	 * Sets the database.
-	 * 
-	 * @param database
-	 *            the database to set
+	 *
+	 * @param database the database to set
 	 */
 	public void setDatabase(final String database)
 	{
 		this.setCatalog(database);
 	}
 	
+	public String getInformixServer()
+	{
+		return this.informixServer;
+	}
 	
 	public void setInformixServer(final String informixServer)
 	{
 		this.informixServer = informixServer;
 	}
 	
-	
-	public String getInformixServer()
-	{
-		return this.informixServer;
-	}
-	
-	
 	// /////////////////////////////////////////////////////////////////////////
 	// override methods //
 	// ///////////////////
+	
 	/**
 	 * @see DbmsConnectionInformation#createJdbcConnectionUrl()
 	 */
@@ -107,9 +98,8 @@ public class InformixConnectionInformation extends ConnectionInformation<Informi
 	{
 		// jdbc:informix-sqli://hostname:portnumber/MyDatabase:INFORMIXSERVER=MyServerName
 		return "jdbc:informix-sqli://" + this.getHost() + ":" + this.getPort() + "/" + this.getCatalog()
-				+ ":INFORMIXSERVER=" + this.getInformixServer();
+			+ ":INFORMIXSERVER=" + this.getInformixServer();
 	}
-	
 	
 	/**
 	 * @see DbmsConnectionInformation#getJdbcDriverClassName()
@@ -119,7 +109,6 @@ public class InformixConnectionInformation extends ConnectionInformation<Informi
 	{
 		return "com.informix.jdbc.IfxDriver";
 	}
-	
 	
 	@Override
 	public boolean isConnectionValid(final Connection connection)

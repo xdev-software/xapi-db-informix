@@ -17,8 +17,6 @@
  */
 package xdev.db.informix.jdbc;
 
-
-
 import com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor;
 import com.xdev.jadoth.sqlengine.dbms.SQLExceptionParser;
 import com.xdev.jadoth.sqlengine.internal.DatabaseGateway;
@@ -26,22 +24,21 @@ import com.xdev.jadoth.sqlengine.internal.tables.SqlTableIdentity;
 
 
 public class InformixDbms
-		extends
-		DbmsAdaptor.Implementation<InformixDbms, InformixDMLAssembler, InformixDDLMapper, InformixRetrospectionAccessor, InformixSyntax>
+	extends
+	DbmsAdaptor.Implementation<InformixDbms, InformixDMLAssembler, InformixDDLMapper, InformixRetrospectionAccessor,
+		InformixSyntax>
 {
 	// /////////////////////////////////////////////////////////////////////////
 	// constants //
 	// ///////////////////
 	
-	/** The Constant MAX_VARCHAR_LENGTH. */
-	protected static final int			MAX_VARCHAR_LENGTH		= Integer.MAX_VALUE;
-	
-	protected static final char			IDENTIFIER_DELIMITER	= '"';
-	
-	public static final InformixSyntax	SYNTAX					= new InformixSyntax();
-	
-	private InformixJDBCDataSource		dataSource;
-	
+	public static final InformixSyntax SYNTAX = new InformixSyntax();
+	/**
+	 * The Constant MAX_VARCHAR_LENGTH.
+	 */
+	protected static final int MAX_VARCHAR_LENGTH = Integer.MAX_VALUE;
+	protected static final char IDENTIFIER_DELIMITER = '"';
+	private InformixJDBCDataSource dataSource;
 	
 	// /////////////////////////////////////////////////////////////////////////
 	// constructors //
@@ -52,37 +49,33 @@ public class InformixDbms
 		this(new SQLExceptionParser.Body());
 	}
 	
-	
 	/**
-	 * @param sqlExceptionParser
-	 *            the sql exception parser
+	 * @param sqlExceptionParser the sql exception parser
 	 */
 	public InformixDbms(final SQLExceptionParser sqlExceptionParser)
 	{
-		super(sqlExceptionParser,false);
+		super(sqlExceptionParser, false);
 		this.setRetrospectionAccessor(new InformixRetrospectionAccessor(this));
 		this.setDMLAssembler(new InformixDMLAssembler(this));
 		this.setSyntax(SYNTAX);
 	}
 	
-	
-	public void setDataSource(InformixJDBCDataSource dataSource)
+	public void setDataSource(final InformixJDBCDataSource dataSource)
 	{
 		this.dataSource = dataSource;
 	}
-	
 	
 	/**
 	 * @see DbmsAdaptor#createConnectionInformation(String, int, String, String, String, String)
 	 */
 	@Override
-	public InformixConnectionInformation createConnectionInformation(final String host,
-			final int port, final String user, final String password, final String catalog, final String properties)
+	public InformixConnectionInformation createConnectionInformation(
+		final String host,
+		final int port, final String user, final String password, final String catalog, final String properties)
 	{
-		return new InformixConnectionInformation(host,port,user,password,catalog,
-				dataSource.getInformixServer(),properties, this);
+		return new InformixConnectionInformation(host, port, user, password, catalog,
+			this.dataSource.getInformixServer(), properties, this);
 	}
-	
 	
 	@Override
 	public Object updateSelectivity(final SqlTableIdentity table)
@@ -90,17 +83,14 @@ public class InformixDbms
 		return null;
 	}
 	
-	
 	/**
-	 * @see com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor#assembleTransformBytes(byte[],
-	 *      java.lang.StringBuilder)
+	 * @see com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor#assembleTransformBytes(byte[], java.lang.StringBuilder)
 	 */
 	@Override
 	public StringBuilder assembleTransformBytes(final byte[] bytes, final StringBuilder sb)
 	{
 		return null;
 	}
-	
 	
 	/**
 	 * @see com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor.Implementation#getRetrospectionAccessor()
@@ -111,7 +101,6 @@ public class InformixDbms
 		throw new RuntimeException("HSQL Retrospection not implemented yet!");
 	}
 	
-	
 	/**
 	 * @see com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor#initialize(com.xdev.jadoth.sqlengine.internal.DatabaseGateway)
 	 */
@@ -119,7 +108,6 @@ public class InformixDbms
 	public void initialize(final DatabaseGateway<InformixDbms> dbc)
 	{
 	}
-	
 	
 	/**
 	 * @see com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor#rebuildAllIndices(java.lang.String)
@@ -130,13 +118,11 @@ public class InformixDbms
 		return null;
 	}
 	
-	
 	@Override
 	public boolean supportsOFFSET_ROWS()
 	{
 		return true;
 	}
-	
 	
 	/**
 	 * @see com.xdev.jadoth.sqlengine.dbms.DbmsAdaptor#getMaxVARCHARlength()
@@ -146,7 +132,6 @@ public class InformixDbms
 	{
 		return MAX_VARCHAR_LENGTH;
 	}
-	
 	
 	@Override
 	public char getIdentifierDelimiter()

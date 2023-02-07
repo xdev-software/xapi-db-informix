@@ -17,15 +17,13 @@
  */
 package xdev.db.informix.jdbc;
 
-
-
-
 import static com.xdev.jadoth.sqlengine.internal.QueryPart.ASEXPRESSION;
 import static com.xdev.jadoth.sqlengine.internal.QueryPart.indent;
 import static com.xdev.jadoth.sqlengine.internal.QueryPart.isSingleLine;
 
 import com.xdev.jadoth.sqlengine.SELECT;
 import com.xdev.jadoth.sqlengine.dbms.standard.StandardDMLAssembler;
+
 
 public class InformixDMLAssembler extends StandardDMLAssembler<InformixDbms>
 {
@@ -34,27 +32,27 @@ public class InformixDMLAssembler extends StandardDMLAssembler<InformixDbms>
 		super(dbms);
 	}
 	
-
 	@Override
-	protected StringBuilder assembleSELECT(final SELECT query, final StringBuilder sb,
-			final int indentLevel, final int flags, final String clauseSeperator,
-			final String newLine)
+	protected StringBuilder assembleSELECT(
+		final SELECT query, final StringBuilder sb,
+		final int indentLevel, final int flags, final String clauseSeperator,
+		final String newLine)
 	{
-		indent(sb,indentLevel,isSingleLine(flags)).append(query.keyword());
-		this.assembleSelectRowLimit(query,sb,flags,clauseSeperator,newLine,indentLevel);
-		this.assembleSelectDISTINCT(query,sb,indentLevel,flags);
-		this.assembleSelectItems(query,sb,flags,indentLevel,newLine);
-		this.assembleSelectSqlClauses(query,sb,indentLevel,flags | ASEXPRESSION,clauseSeperator,
-				newLine);
-		this.assembleAppendSELECTs(query,sb,indentLevel,flags,clauseSeperator,newLine);
+		indent(sb, indentLevel, isSingleLine(flags)).append(query.keyword());
+		this.assembleSelectRowLimit(query, sb, flags, clauseSeperator, newLine, indentLevel);
+		this.assembleSelectDISTINCT(query, sb, indentLevel, flags);
+		this.assembleSelectItems(query, sb, flags, indentLevel, newLine);
+		this.assembleSelectSqlClauses(query, sb, indentLevel, flags | ASEXPRESSION, clauseSeperator,
+			newLine);
+		this.assembleAppendSELECTs(query, sb, indentLevel, flags, clauseSeperator, newLine);
 		return sb;
 	}
 	
-
 	@Override
-	protected StringBuilder assembleSelectRowLimit(final SELECT query, final StringBuilder sb,
-			final int flags, final String clauseSeperator, final String newLine,
-			final int indentLevel)
+	protected StringBuilder assembleSelectRowLimit(
+		final SELECT query, final StringBuilder sb,
+		final int flags, final String clauseSeperator, final String newLine,
+		final int indentLevel)
 	{
 		final Integer offset = query.getOffsetSkipCount();
 		final Integer limit = query.getFetchFirstRowCount();

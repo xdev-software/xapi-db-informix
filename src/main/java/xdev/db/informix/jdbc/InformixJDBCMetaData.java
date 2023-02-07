@@ -17,9 +17,6 @@
  */
 package xdev.db.informix.jdbc;
 
-
-
-
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -69,83 +66,34 @@ import xdev.vt.EntityRelationshipModel;
 public class InformixJDBCMetaData extends JDBCMetaData
 {
 	
-	private static final XdevLogger	LOGGER	= LoggerFactory.getLogger(InformixJDBCMetaData.class);
-	private HashMap<String, String>	synMap;
-	private boolean					isGetSynonym;
-	
+	private static final XdevLogger LOGGER = LoggerFactory.getLogger(InformixJDBCMetaData.class);
+	private HashMap<String, String> synMap;
+	private boolean isGetSynonym;
 	
 	public InformixJDBCMetaData(final InformixJDBCDataSource dataSource) throws DBException
 	{
 		super(dataSource);
 	}
 	
-	
-	@Override
-	public TableInfo[] getTableInfos(final ProgressMonitor monitor, final EnumSet<TableType> types)
-			throws DBException
-	{
-		monitor.beginTask("",ProgressMonitor.UNKNOWN); //$NON-NLS-1$
-		
-		final List<TableInfo> list = new ArrayList<>();
-		
-		try
-		{
-			try(final JDBCConnection jdbcConnection = (JDBCConnection)this.dataSource.openConnection())
-			{
-				final Connection       connection = jdbcConnection.getConnection();
-				final DatabaseMetaData meta       = connection.getMetaData();
-				final String           catalog    = this.getCatalog(this.dataSource);
-				final String           schema     = this.getSchema(this.dataSource);
-				final String[]         castTypes  = this.castEnumSetToStringArray(types);
-				final ResultSet        rs         = meta.getTables(catalog,schema,null,castTypes);
-				
-				while(rs.next() && !monitor.isCanceled())
-				{
-					final String tableTypeName = rs.getString("TABLE_TYPE"); //$NON-NLS-1$
-					final TableType type = identifyCorrectTableType(tableTypeName);
-					
-					if(types.contains(type))
-					{
-						// no schema (== null)
-						list.add(new TableInfo(type,null,rs.getString("TABLE_NAME"))); //$NON-NLS-1$
-					}
-				}
-				rs.close();
-			}
-		}
-		catch(final SQLException e)
-		{
-			throw new DBException(this.dataSource,e);
-		}
-		
-		monitor.done();
-		
-		final TableInfo[] tables = list.toArray(new TableInfo[list.size()]);
-		Arrays.sort(tables);
-		return tables;
-	}
-	
 	/**
-	 * @return {@link xdev.db.DBMetaData.TableType#TABLE}   ||
-	 * 		   {@link xdev.db.DBMetaData.TableType#VIEW}    ||
-	 *         {@link xdev.db.DBMetaData.TableType#SYNONYM} ||
-	 *         {@link xdev.db.DBMetaData.TableType#OTHER}
+	 * @return {@link xdev.db.DBMetaData.TableType#TABLE}   || {@link xdev.db.DBMetaData.TableType#VIEW}    ||
+	 * {@link xdev.db.DBMetaData.TableType#SYNONYM} || {@link xdev.db.DBMetaData.TableType#OTHER}
 	 */
 	private static TableType identifyCorrectTableType(final String tableTypeName)
 	{
 		final TableType type;
 		if(tableTypeName != null
-				&& tableTypeName.equalsIgnoreCase(TableType.TABLE.name()))
+			&& tableTypeName.equalsIgnoreCase(TableType.TABLE.name()))
 		{
 			type = TableType.TABLE;
 		}
 		else if(tableTypeName != null
-				&& tableTypeName.equalsIgnoreCase(TableType.VIEW.name()))
+			&& tableTypeName.equalsIgnoreCase(TableType.VIEW.name()))
 		{
 			type = TableType.VIEW;
 		}
 		else if(tableTypeName != null
-				&& tableTypeName.equalsIgnoreCase(TableType.SYNONYM.name()))
+			&& tableTypeName.equalsIgnoreCase(TableType.SYNONYM.name()))
 		{
 			type = TableType.SYNONYM;
 		}
@@ -156,26 +104,114 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		return type;
 	}
 	
+	/**
+	 * Checks the <b>paramTypes</b> on position <b> i </b> to add one of the following ParamTypes to the list
+	 * <b>params</b>
+	 * <ol>
+	 *     <li>{@link ParamType#OUT}    </li>
+	 *     <li>{@link ParamType#IN_OUT} </li>
+	 *     <li>{@link ParamType#IN}     </li>
+	 * </ol>
+	 */
+	private static void addParamAccordingToParamType(
+		final List<String> paramTypes,
+		final List<Integer> paramIds,
+		final List<Param> params,
+		final int i,
+		final String paramName)
+	{
+		final DataType dataType = DataType.get(paramIds.get(i));
+		
+		if(paramTypes.get(i).startsWith("out ") //$NON-NLS-1$
+			|| paramTypes.get(i).startsWith("OUT ")) //$NON-NLS-1$
+		{
+			params.add(new Param(ParamType.OUT, paramName, dataType));
+		}
+		else if(paramTypes.get(i).startsWith("inout ") //$NON-NLS-1$
+			|| paramTypes.get(i).startsWith("INOUT ")) //$NON-NLS-1$
+		{
+			params.add(new Param(ParamType.IN_OUT, paramName, dataType));
+		}
+		else
+		{
+			params.add(new Param(ParamType.IN, paramName, dataType));
+		}
+	}
+	
+	/**
+	 * Checks if remarks.equals(t)
+	 */
+	private static boolean isToCreateProcedure(final String remarks)
+	{
+		return remarks.equals("t");
+	}
+	
 	@Override
-	protected TableMetaData getTableMetaData(final JDBCConnection jdbcConnection, final DatabaseMetaData meta,
-			final int flags, final TableInfo table) throws DBException, SQLException
+	public TableInfo[] getTableInfos(final ProgressMonitor monitor, final EnumSet<TableType> types)
+		throws DBException
+	{
+		monitor.beginTask("", ProgressMonitor.UNKNOWN); //$NON-NLS-1$
+		
+		final List<TableInfo> list = new ArrayList<>();
+		
+		try
+		{
+			try(final JDBCConnection jdbcConnection = (JDBCConnection)this.dataSource.openConnection())
+			{
+				final Connection connection = jdbcConnection.getConnection();
+				final DatabaseMetaData meta = connection.getMetaData();
+				final String catalog = this.getCatalog(this.dataSource);
+				final String schema = this.getSchema(this.dataSource);
+				final String[] castTypes = this.castEnumSetToStringArray(types);
+				final ResultSet rs = meta.getTables(catalog, schema, null, castTypes);
+				
+				while(rs.next() && !monitor.isCanceled())
+				{
+					final String tableTypeName = rs.getString("TABLE_TYPE"); //$NON-NLS-1$
+					final TableType type = identifyCorrectTableType(tableTypeName);
+					
+					if(types.contains(type))
+					{
+						// no schema (== null)
+						list.add(new TableInfo(type, null, rs.getString("TABLE_NAME"))); //$NON-NLS-1$
+					}
+				}
+				rs.close();
+			}
+		}
+		catch(final SQLException e)
+		{
+			throw new DBException(this.dataSource, e);
+		}
+		
+		monitor.done();
+		
+		final TableInfo[] tables = list.toArray(new TableInfo[list.size()]);
+		Arrays.sort(tables);
+		return tables;
+	}
+	
+	@Override
+	protected TableMetaData getTableMetaData(
+		final JDBCConnection jdbcConnection, final DatabaseMetaData meta,
+		final int flags, final TableInfo table) throws DBException, SQLException
 	{
 		final String catalog = this.getCatalog(this.dataSource);
 		final String schema = this.getSchema(this.dataSource);
 		
 		final String tableName = table.getName();
-		final Table tableIdentity = new Table(tableName,"META_DUMMY"); //$NON-NLS-1$
+		final Table tableIdentity = new Table(tableName, "META_DUMMY"); //$NON-NLS-1$
 		
 		final Map<String, Object> defaultValues = new HashMap<>();
 		final Map<String, Integer> columnSizes = new HashMap<>();
 		
-		ResultSet rs = meta.getColumns(catalog,schema,tableName,null);
+		ResultSet rs = meta.getColumns(catalog, schema, tableName, null);
 		
 		while(rs.next())
 		{
 			final String columnName = rs.getString("COLUMN_NAME"); //$NON-NLS-1$
-			defaultValues.put(columnName,rs.getObject("COLUMN_DEF")); //$NON-NLS-1$
-			columnSizes.put(columnName,rs.getInt("COLUMN_SIZE")); //$NON-NLS-1$
+			defaultValues.put(columnName, rs.getObject("COLUMN_DEF")); //$NON-NLS-1$
+			columnSizes.put(columnName, rs.getInt("COLUMN_SIZE")); //$NON-NLS-1$
 		}
 		rs.close();
 		
@@ -201,7 +237,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				
 				try
 				{
-					rs = meta.getPrimaryKeys(catalog,schema,tableName);
+					rs = meta.getPrimaryKeys(catalog, schema, tableName);
 					while(rs.next())
 					{
 						primaryKeyColumns.add(rs.getString("COLUMN_NAME")); //$NON-NLS-1$
@@ -216,11 +252,12 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				
 				if(!primaryKeyColumns.isEmpty())
 				{
-					indexMap.put(new IndexInfo("PRIMARY_KEY",IndexType.PRIMARY_KEY), //$NON-NLS-1$
-							primaryKeyColumns);
+					indexMap.put(
+						new IndexInfo("PRIMARY_KEY", IndexType.PRIMARY_KEY), //$NON-NLS-1$
+						primaryKeyColumns);
 				}
 				
-				rs = meta.getIndexInfo(catalog,schema,tableName,false,true);
+				rs = meta.getIndexInfo(catalog, schema, tableName, false, true);
 				while(rs.next())
 				{
 					final String indexName = rs.getString("INDEX_NAME"); //$NON-NLS-1$
@@ -230,13 +267,13 @@ public class InformixJDBCMetaData extends JDBCMetaData
 						&& !primaryKeyColumns.contains(columnName))
 					{
 						final boolean unique = !rs.getBoolean("NON_UNIQUE"); //$NON-NLS-1$
-						final IndexInfo info = new IndexInfo(indexName,unique ? IndexType.UNIQUE
-								: IndexType.NORMAL);
+						final IndexInfo info = new IndexInfo(indexName, unique ? IndexType.UNIQUE
+							: IndexType.NORMAL);
 						Set<String> columnNames = indexMap.get(info);
 						if(columnNames == null)
 						{
 							columnNames = new HashSet<>();
-							indexMap.put(info,columnNames);
+							indexMap.put(info, columnNames);
 						}
 						columnNames.add(columnName);
 					}
@@ -249,7 +286,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				try
 				{
 					result = jdbcConnection.query(new SELECT().columns(Functions.COUNT()).FROM(
-							tableIdentity));
+						tableIdentity));
 					if(result.next())
 					{
 						count = result.getInt(0);
@@ -269,10 +306,10 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		{
 			final Set<String> columnList = indexMap.get(indexInfo);
 			final String[] indexColumns = columnList.toArray(new String[columnList.size()]);
-			indices[i++] = new Index(indexInfo.name,indexInfo.type,indexColumns);
+			indices[i++] = new Index(indexInfo.name, indexInfo.type, indexColumns);
 		}
 		
-		return new TableMetaData(table,columns,indices,count);
+		return new TableMetaData(table, columns, indices, count);
 	}
 	
 	private void fillMetaDataColumns(
@@ -291,7 +328,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		{
 			defaultValue = defaultValues.get(name);
 		}
-		defaultValue = this.checkDefaultValue(defaultValue,column);
+		defaultValue = this.checkDefaultValue(defaultValue, column);
 		
 		int length = column.getLength();
 		if(length == 0 && columnSizes.containsKey(name))
@@ -317,20 +354,20 @@ public class InformixJDBCMetaData extends JDBCMetaData
 	}
 	
 	/**
-	 * @since 4.0
 	 * @author XDEV Software (MP)
+	 * @since 4.0
 	 */
 	@Override
 	public StoredProcedure[] getStoredProcedures(final ProgressMonitor monitor) throws DBException
 	{
-		monitor.beginTask("",ProgressMonitor.UNKNOWN); //$NON-NLS-1$
+		monitor.beginTask("", ProgressMonitor.UNKNOWN); //$NON-NLS-1$
 		
 		final List<StoredProcedure> list = new ArrayList<>();
 		
 		try
 		{
 			final ConnectionProvider<?> connectionProvider = this.dataSource.getConnectionProvider();
-
+			
 			try(final Connection connection = connectionProvider.getConnection())
 			{
 				connection.setReadOnly(false);
@@ -338,7 +375,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				
 				final String catalog = this.getCatalog(this.dataSource);
 				final String schema = this.getSchema(this.dataSource);
-			
+				
 				final ResultSet rs = this.getProcedures(
 					(IfxConnection)meta.getConnection(),
 					catalog
@@ -380,36 +417,36 @@ public class InformixJDBCMetaData extends JDBCMetaData
 								proc_name,
 								proc_description,
 								params.toArray(new Param[params.size()])
-								));
+							));
 						}
 						proc_schema = rs.getString("owner").trim(); //$NON-NLS-1$
-						proc_name   = rs.getString("procname"); //$NON-NLS-1$
-						procId      = rs.getString("procid"); //$NON-NLS-1$
-						remarks     = rs.getString("isproc"); //$NON-NLS-1$
+						proc_name = rs.getString("procname"); //$NON-NLS-1$
+						procId = rs.getString("procid"); //$NON-NLS-1$
+						remarks = rs.getString("isproc"); //$NON-NLS-1$
 						param_types = rs.getString("ifx_param_types"); //$NON-NLS-1$
-						param_ids   = rs.getString("ifx_param_ids"); //$NON-NLS-1$
-						ret_types   = rs.getString("ifx_ret_types"); //$NON-NLS-1$
-						ret_ids     = rs.getString("ifx_ret_ids"); //$NON-NLS-1$
-						paramTypes  = Arrays.asList(param_types.split(",")); //$NON-NLS-1$
-						paramIds    = this.parseIfxIds(param_ids);
-						params      = new ArrayList<>();
-						retIds      = this.parseIfxIds(ret_ids);
+						param_ids = rs.getString("ifx_param_ids"); //$NON-NLS-1$
+						ret_types = rs.getString("ifx_ret_types"); //$NON-NLS-1$
+						ret_ids = rs.getString("ifx_ret_ids"); //$NON-NLS-1$
+						paramTypes = Arrays.asList(param_types.split(",")); //$NON-NLS-1$
+						paramIds = this.parseIfxIds(param_ids);
+						params = new ArrayList<>();
+						retIds = this.parseIfxIds(ret_ids);
 						i = 0;
 						
 						switch(retIds.size())
 						{
 							case 0:
 								returnTypeFlavor = ReturnTypeFlavor.VOID;
-							break;
+								break;
 							case 1:
 								returnTypeFlavor = ReturnTypeFlavor.TYPE;
 								
 								returnType = DataType.get(retIds.get(0));
-							break;
+								break;
 							
 							default:
 								returnTypeFlavor = ReturnTypeFlavor.RESULT_SET;
-							break;
+								break;
 						}
 					}
 					
@@ -426,7 +463,6 @@ public class InformixJDBCMetaData extends JDBCMetaData
 						addParamAccordingToParamType(paramTypes, paramIds, params, i, paramName);
 						i++;
 					}
-					
 				}
 				if(ret_ids != null)
 				{
@@ -437,16 +473,15 @@ public class InformixJDBCMetaData extends JDBCMetaData
 						proc_cat,
 						proc_schema
 					);
-					list.add(new StoredProcedure(returnTypeFlavor,returnType,proc_name,
-							proc_description,params.toArray(new Param[params.size()])));
-					
+					list.add(new StoredProcedure(returnTypeFlavor, returnType, proc_name,
+						proc_description, params.toArray(new Param[params.size()])));
 				}
 			}
 		}
 		catch(final SQLException e)
 		{
-			LOGGER.error("Cannot get stored procedures.",e); //$NON-NLS-1$
-			throw new DBException(this.dataSource,e);
+			LOGGER.error("Cannot get stored procedures.", e); //$NON-NLS-1$
+			throw new DBException(this.dataSource, e);
 		}
 		
 		monitor.done();
@@ -455,50 +490,14 @@ public class InformixJDBCMetaData extends JDBCMetaData
 	}
 	
 	/**
-	 * Checks the <b>paramTypes</b> on position <b> i </b> to add one of the following ParamTypes to the list <b>params</b>
-	 * <ol>
-	 *     <li>{@link ParamType#OUT}    </li>
-	 *     <li>{@link ParamType#IN_OUT} </li>
-	 *     <li>{@link ParamType#IN}     </li>
-	 * </ol>
-	 */
-	private static void addParamAccordingToParamType(
-		final List<String> paramTypes,
-		final List<Integer> paramIds,
-		final List<Param> params,
-		final int i,
-		final String paramName)
-	{
-		final DataType dataType = DataType.get(paramIds.get(i));
-		
-		if(paramTypes.get(i).startsWith("out ") //$NON-NLS-1$
-				|| paramTypes.get(i).startsWith("OUT ")) //$NON-NLS-1$
-		{
-			params.add(new Param(ParamType.OUT, paramName,dataType));
-			
-		}
-		else if(paramTypes.get(i).startsWith("inout ") //$NON-NLS-1$
-				|| paramTypes.get(i).startsWith("INOUT ")) //$NON-NLS-1$
-		{
-			params.add(new Param(ParamType.IN_OUT, paramName,dataType));
-			
-		}
-		else
-		{
-			params.add(new Param(ParamType.IN, paramName,dataType));
-		}
-	}
-	
-	/**
-	 * Parse a string of Informix- Datatypes to a list of JDBC-Types represented
-	 * by a integer value
+	 * Parse a string of Informix- Datatypes to a list of JDBC-Types represented by a integer value
 	 *
 	 * @return a list of Integers, JDBC-Types
 	 */
 	private List<Integer> parseIfxIds(final String paramString)
 	{
 		final boolean bool = IfxStatement.t;
-		final StringTokenizer localStringTokenizer = new StringTokenizer(paramString,"(,)"); //$NON-NLS-1$
+		final StringTokenizer localStringTokenizer = new StringTokenizer(paramString, "(,)"); //$NON-NLS-1$
 		
 		int i2 = 1;
 		final List<Integer> list = new ArrayList<>();
@@ -514,13 +513,17 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				final String token = localStringTokenizer.nextToken();
 				
 				if(i2 != 1)
+				{
 					break;
+				}
 				
 				final int tokenValueAsInt = Integer.parseInt(token.trim());
 				int jdbc2TypeAsInt = IfxTypes.FromIfxToJDBC2Type(tokenValueAsInt);
 				
 				if(tokenValueAsInt == 4)
+				{
 					jdbc2TypeAsInt = 6;
+				}
 				list.add(jdbc2TypeAsInt);
 				i2 = 0;
 			}
@@ -533,8 +536,12 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		return list;
 	}
 	
-	
-	private String getProcedureDescription(final String retTypes, final String paramTypes, final boolean createProcedure, final String procCat, final String procSchema)
+	private String getProcedureDescription(
+		final String retTypes,
+		final String paramTypes,
+		final boolean createProcedure,
+		final String procCat,
+		final String procSchema)
 	{
 		
 		String procDescription;
@@ -555,8 +562,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			{
 				
 				procDescription = procDescription + paramTypes + ") returning " + retTypes //$NON-NLS-1$
-						+ ";"; //$NON-NLS-1$
-				
+					+ ";"; //$NON-NLS-1$
 			}
 			else
 			{
@@ -565,15 +571,6 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		}
 		
 		return procDescription;
-		
-	}
-	
-	/**
-	 * Checks if remarks.equals(t)
-	 */
-	private static boolean isToCreateProcedure(final String remarks)
-	{
-		return remarks.equals("t");
 	}
 	
 	private ResultSet getProcedures(final IfxConnection connection, final String catalog) throws SQLException
@@ -585,12 +582,16 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			statement.setAutoFree(true);
 			
 			sql = "select '" //$NON-NLS-1$
-					+ catalog
-					+ "', " //$NON-NLS-1$
-					+ "SP.owner, SP.procname, SP.procid, SP.isproc, ifx_param_types(SP.procid) AS ifx_param_types,ifx_param_ids(SP.procid) AS ifx_param_ids,ifx_ret_types(SP.procid) AS ifx_ret_types, ifx_ret_ids(SP.procid) AS ifx_ret_ids, SPC.paramid, SPC.paramname from " //$NON-NLS-1$
-					+ "informix.sysprocedures SP INNER JOIN  informix.sysproccolumns SPC ON SPC.procid = SP.procid where not mode='d' and not mode='r' and SP.procid > 452"; //$NON-NLS-1$
+				+ catalog
+				+ "', " //$NON-NLS-1$
+				+ "SP.owner, SP.procname, SP.procid, SP.isproc, ifx_param_types(SP.procid) AS ifx_param_types,"
+				+ "ifx_param_ids(SP.procid) AS ifx_param_ids,ifx_ret_types(SP.procid) AS ifx_ret_types, ifx_ret_ids(SP"
+				+ ".procid) AS ifx_ret_ids, SPC.paramid, SPC.paramname from "
+				//$NON-NLS-1$
+				+ "informix.sysprocedures SP INNER JOIN  informix.sysproccolumns SPC ON SPC.procid = SP.procid where "
+				+ "not mode='d' and not mode='r' and SP.procid > 452"; //$NON-NLS-1$
 			
-			statement.executeQuery(sql,false);
+			statement.executeQuery(sql, false);
 			
 			return statement.getResultSet();
 		}
@@ -598,33 +599,30 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		{
 			final String err = "Cannot get stored procedures. Sql statement: " + sql; //$NON-NLS-1$
 			LOGGER.error(err, Arrays.toString(e.getStackTrace()));
-			throw new SQLException(err,e);
+			throw new SQLException(err, e);
 		}
-		
 	}
-	
 	
 	@Override
 	protected void createTable(final JDBCConnection jdbcConnection, final TableMetaData table)
-			throws DBException, SQLException
+		throws DBException, SQLException
 	{
 	}
-	
 	
 	@Override
-	protected void addColumn(final JDBCConnection jdbcConnection, final TableMetaData table,
-			final ColumnMetaData column, final ColumnMetaData columnBefore, final ColumnMetaData columnAfter)
-			throws DBException, SQLException
+	protected void addColumn(
+		final JDBCConnection jdbcConnection, final TableMetaData table,
+		final ColumnMetaData column, final ColumnMetaData columnBefore, final ColumnMetaData columnAfter)
+		throws DBException, SQLException
 	{
 	}
-	
 	
 	@Override
-	protected void alterColumn(final JDBCConnection jdbcConnection, final TableMetaData table,
-			final ColumnMetaData column, final ColumnMetaData existing) throws DBException, SQLException
+	protected void alterColumn(
+		final JDBCConnection jdbcConnection, final TableMetaData table,
+		final ColumnMetaData column, final ColumnMetaData existing) throws DBException, SQLException
 	{
 	}
-	
 	
 	@Override
 	public boolean equalsType(final ColumnMetaData clientColumn, final ColumnMetaData dbColumn)
@@ -632,43 +630,40 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		return false;
 	}
 	
-	
 	@Override
-	protected void dropColumn(final JDBCConnection jdbcConnection, final TableMetaData table,
-			final ColumnMetaData column) throws DBException, SQLException
+	protected void dropColumn(
+		final JDBCConnection jdbcConnection, final TableMetaData table,
+		final ColumnMetaData column) throws DBException, SQLException
 	{
 	}
-	
 	
 	@Override
 	protected void createIndex(final JDBCConnection jdbcConnection, final TableMetaData table, final Index index)
-			throws DBException, SQLException
+		throws DBException, SQLException
 	{
 	}
-	
 	
 	@Override
 	protected void dropIndex(final JDBCConnection jdbcConnection, final TableMetaData table, final Index index)
-			throws DBException, SQLException
+		throws DBException, SQLException
 	{
 	}
 	
-	
 	/**
-	 * @since 4.0
 	 * @author XDEV Software (MP)
+	 * @since 4.0
 	 */
 	@Override
 	public TableMetaData[] getTableMetaData(final ProgressMonitor monitor, final int flags, final TableInfo... tables)
-			throws DBException
+		throws DBException
 	{
 		TableMetaData[] tableMetaDatas = null;
 		final TableMetaData[] result = new TableMetaData[tables.length];
 		
 		try
 		{
-			tableMetaDatas = this.getTableMetaData(monitor,TableType.TABLES_VIEWS_AND_SYNONYMS,flags,
-					false);
+			tableMetaDatas = this.getTableMetaData(monitor, TableType.TABLES_VIEWS_AND_SYNONYMS, flags,
+				false);
 			
 			int i = 0;
 			for(final TableMetaData tableMetaData : tableMetaDatas)
@@ -683,24 +678,22 @@ public class InformixJDBCMetaData extends JDBCMetaData
 						result[i++] = tableMetaData;
 						break;
 					}
-					
 				}
 			}
-			
 		}
 		catch(final Exception e)
 		{
 			final String err = "Request to get TableMetaDatas failed!."; //$NON-NLS-1$
 			LOGGER.error(err);
-			throw new DBException(this.dataSource,err,e);
+			throw new DBException(this.dataSource, err, e);
 		}
 		
 		return result;
 	}
 	
-	
-	private TableMetaData[] getTableMetaData(final ProgressMonitor dummy, final EnumSet<TableType> types,
-			final int flags, final boolean filterSysTables) throws Exception
+	private TableMetaData[] getTableMetaData(
+		final ProgressMonitor dummy, final EnumSet<TableType> types,
+		final int flags, final boolean filterSysTables) throws Exception
 	{
 		final JDBCConnection<?, ?> jdbcConnection = (JDBCConnection<?, ?>)this.dataSource.openConnection();
 		final Connection connection = jdbcConnection.getConnection();
@@ -725,24 +718,24 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			
 			this.lodSynonyms(statement);
 			
-			this.requestStatementForTableMetaDatas(castTypes,statement,filterSysTables);
+			this.requestStatementForTableMetaDatas(castTypes, statement, filterSysTables);
 			final ResultSet rs = statement.getResultSet();
-			this.parseResultToMaps(schema,rs,columnsMap,tableInfoMap,columnSet);
+			this.parseResultToMaps(schema, rs, columnsMap, tableInfoMap, columnSet);
 			
 			final Map<String, List<Index>> indicesMap = new HashMap<>();
 			
-			this.calculateIndices(flags,meta,catalog,schema,columnSet,indicesMap);
+			this.calculateIndices(flags, meta, catalog, schema, columnSet, indicesMap);
 			
 			final Map<String, Integer> countsMap = new HashMap<>();
 			
-			this.calculateRowCounts(flags,statement,tableInfoMap,countsMap);
+			this.calculateRowCounts(flags, statement, tableInfoMap, countsMap);
 			
-			result = this.convToTableMetaData(indicesMap,tableInfoMap,columnsMap,countsMap);
+			result = this.convToTableMetaData(indicesMap, tableInfoMap, columnsMap, countsMap);
 		}
 		catch(final Exception e)
 		{
 			final String err = "Cannot return TableMetaData"; //$NON-NLS-1$
-			throw new DBException(this.dataSource,err,e);
+			throw new DBException(this.dataSource, err, e);
 		}
 		finally
 		{
@@ -753,27 +746,25 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		}
 		
 		return result;
-		
 	}
-	
 	
 	private void lodSynonyms(final IfxStatement statement) throws SQLException
 	{
 		final ResultSet rs = statement
-				.executeQuery("SELECT a.tabname , b.btabid FROM systables a, syssyntable b WHERE a.tabid = b.tabid; "); //$NON-NLS-1$
+			.executeQuery("SELECT a.tabname , b.btabid FROM systables a, syssyntable b WHERE a.tabid = b.tabid; ");
+		//$NON-NLS-1$
 		while(rs.next())
 		{
 			this.synMap = new HashMap<>();
 			final String tabname = rs.getString("tabname"); //$NON-NLS-1$
 			final String btabid = rs.getString("btabid"); //$NON-NLS-1$
-			this.synMap.put(btabid,tabname);
+			this.synMap.put(btabid, tabname);
 		}
-		
 	}
 	
-	
-	private void calculateRowCounts(final int flags, final IfxStatement statement,
-			final Map<String, TableInfo> tableInfoMap, final Map<String, Integer> countsMap) throws Exception
+	private void calculateRowCounts(
+		final int flags, final IfxStatement statement,
+		final Map<String, TableInfo> tableInfoMap, final Map<String, Integer> countsMap) throws Exception
 	{
 		if((flags & ROW_COUNT) != 0)
 		{
@@ -792,24 +783,24 @@ public class InformixJDBCMetaData extends JDBCMetaData
 					if(resultSet.next())
 					{
 						rowCount = resultSet.getInt(1);
-						countsMap.put(lastTableName,rowCount);
+						countsMap.put(lastTableName, rowCount);
 					}
 					resultSet.close();
 				}
-				
 			}
 			catch(final Exception e)
 			{
-				final String err = "Cannot calculate row count. Row count for " + lastTableName + " is " //$NON-NLS-1$ //$NON-NLS-2$
+				final String err =
+					"Cannot calculate row count. Row count for " + lastTableName + " is " //$NON-NLS-1$ //$NON-NLS-2$
 						+ rowCount;
-				throw new Exception(err,e);
+				throw new Exception(err, e);
 			}
 		}
 	}
 	
-	
-	private void calculateIndices(final int flags, final DatabaseMetaData meta, final String catalog, final String schema,
-			final Set<String> columnSet, final Map<String, List<Index>> indicesMap) throws Exception
+	private void calculateIndices(
+		final int flags, final DatabaseMetaData meta, final String catalog, final String schema,
+		final Set<String> columnSet, final Map<String, List<Index>> indicesMap) throws Exception
 	{
 		if((flags & INDICES) != 0)
 		{
@@ -817,35 +808,34 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			
 			try
 			{
-				this.getPrimaryKeys(meta,catalog,schema,columnSet,indicesMap);
-				this.getIndexInfos(meta,catalog,schema,columnSet,indicesMap,primaryKeyColumns);
+				this.getPrimaryKeys(meta, catalog, schema, columnSet, indicesMap);
+				this.getIndexInfos(meta, catalog, schema, columnSet, indicesMap, primaryKeyColumns);
 			}
 			catch(final Exception e)
 			{
 				throw e;
 			}
-			
 		}
 	}
 	
-	
-	private void getIndexInfos(final DatabaseMetaData meta, final String catalog, final String schema,
-			final Set<String> columnSet, final Map<String, List<Index>> indicesMap,
-			final Set<String> primaryKeyColumns) throws SQLException
+	private void getIndexInfos(
+		final DatabaseMetaData meta, final String catalog, final String schema,
+		final Set<String> columnSet, final Map<String, List<Index>> indicesMap,
+		final Set<String> primaryKeyColumns) throws SQLException
 	{
 		final ResultSet rs;
-		rs = meta.getIndexInfo(catalog,schema,null,false,true);
+		rs = meta.getIndexInfo(catalog, schema, null, false, true);
 		while(rs.next())
 		{
 			final String indexName = rs.getString("INDEX_NAME"); //$NON-NLS-1$
 			final String columnName = rs.getString("COLUMN_NAME"); //$NON-NLS-1$
 			final String tableName = rs.getString("TABLE_NAME"); //$NON-NLS-1$
 			if(columnSet.contains(columnName) && indexName != null && columnName != null
-					&& !primaryKeyColumns.contains(columnName))
+				&& !primaryKeyColumns.contains(columnName))
 			{
 				final boolean unique = !rs.getBoolean("NON_UNIQUE"); //$NON-NLS-1$
-				final IndexInfo info = new IndexInfo(indexName,unique ? IndexType.UNIQUE
-						: IndexType.NORMAL);
+				final IndexInfo info = new IndexInfo(indexName, unique ? IndexType.UNIQUE
+					: IndexType.NORMAL);
 				
 				if(indicesMap.containsKey(tableName))
 				{
@@ -869,25 +859,24 @@ public class InformixJDBCMetaData extends JDBCMetaData
 							index.setColumns(newColumns);
 						}
 					}
-					
 				}
 				else
 				{
 					final List<Index> iList = new ArrayList<>();
-					iList.add(new Index(info.name,info.type,columnName));
-					indicesMap.put(tableName,iList);
+					iList.add(new Index(info.name, info.type, columnName));
+					indicesMap.put(tableName, iList);
 				}
 			}
 		}
 		rs.close();
 	}
 	
-	
-	private void getPrimaryKeys(final DatabaseMetaData meta, final String catalog, final String schema,
-			final Set<String> columnSet, final Map<String, List<Index>> indicesMap) throws SQLException
+	private void getPrimaryKeys(
+		final DatabaseMetaData meta, final String catalog, final String schema,
+		final Set<String> columnSet, final Map<String, List<Index>> indicesMap) throws SQLException
 	{
 		final ResultSet rs;
-		rs = meta.getPrimaryKeys(catalog,schema,null);
+		rs = meta.getPrimaryKeys(catalog, schema, null);
 		// add primary keys
 		while(rs.next())
 		{
@@ -899,7 +888,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				if(indicesMap.containsKey(tableName))
 				{
 					indicesMap.get(tableName).add(
-							new Index("PRIMARY_KEY",IndexType.PRIMARY_KEY,columnName)); //$NON-NLS-1$
+						new Index("PRIMARY_KEY", IndexType.PRIMARY_KEY, columnName)); //$NON-NLS-1$
 					final List<Index> list = indicesMap.get(tableName);
 					
 					for(final Index index : list)
@@ -921,19 +910,18 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				else
 				{
 					final List<Index> iList = new ArrayList<>();
-					iList.add(new Index("PRIMARY_KEY",IndexType.PRIMARY_KEY,columnName)); //$NON-NLS-1$
-					indicesMap.put(tableName,iList);
+					iList.add(new Index("PRIMARY_KEY", IndexType.PRIMARY_KEY, columnName)); //$NON-NLS-1$
+					indicesMap.put(tableName, iList);
 				}
-				
 			}
 		}
 		rs.close();
 	}
 	
-	
-	private TableMetaData[] convToTableMetaData(final Map<String, List<Index>> indicesMap,
-			final Map<String, TableInfo> tableInfoMap, final Map<String, List<ColumnMetaData>> columnsMap,
-			final Map<String, Integer> countsMap)
+	private TableMetaData[] convToTableMetaData(
+		final Map<String, List<Index>> indicesMap,
+		final Map<String, TableInfo> tableInfoMap, final Map<String, List<ColumnMetaData>> columnsMap,
+		final Map<String, Integer> countsMap)
 	{
 		TableMetaData[] tableMetaDatas = null;
 		if(this.isGetSynonym && this.synMap != null)
@@ -957,7 +945,6 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			if(indexList != null)
 			{
 				indices = indexList.toArray(new Index[indexList.size()]);
-				
 			}
 			
 			int count = UNKNOWN_ROW_COUNT;
@@ -970,36 +957,36 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			{
 				// add original table
 				final TableInfo tableInfo = tableInfoMap.get(entry.getKey());
-				tableMetaDatas[i++] = new TableMetaData(tableInfo,columns,indices,count);
+				tableMetaDatas[i++] = new TableMetaData(tableInfo, columns, indices, count);
 				
 				// add synonym table
-				final TableInfo newTableInfo = new TableInfo(tableInfo.getType(),tableInfo.getSchema(),
+				final TableInfo newTableInfo = new TableInfo(tableInfo.getType(), tableInfo.getSchema(),
 					this.synMap.get(entry.getKey()));
-				final TableMetaData newTableMetaData = new TableMetaData(newTableInfo,columns,indices,
-						count);
+				final TableMetaData newTableMetaData = new TableMetaData(newTableInfo, columns, indices,
+					count);
 				tableMetaDatas[i++] = newTableMetaData;
-				
 			}
 			else
 			{
 				final TableMetaData tableMetaData = new TableMetaData(tableInfoMap.get(entry.getKey()),
-						columns,indices,count);
+					columns, indices, count);
 				tableMetaDatas[i++] = tableMetaData;
-				
 			}
-			
 		}
 		
 		return tableMetaDatas;
 	}
 	
-	
-	private void requestStatementForTableMetaDatas(final String[] castTypes, final IfxStatement statement,
-			final boolean filterSysTables) throws SQLException
+	private void requestStatementForTableMetaDatas(
+		final String[] castTypes, final IfxStatement statement,
+		final boolean filterSysTables) throws SQLException
 	{
 		
 		final StringBuffer sql = new StringBuffer(
-				"select T.tabname, T.tabtype, TC.colname, TC.collength, TC.coltype, TC.extended_id ,sdf.default, sdf.type, TC.colmin, TC.colmax, T.tabid from informix.systables T LEFT JOIN informix.syscolumns TC ON TC.tabid = T.tabid LEFT JOIN informix.sysdefaults sdf ON (TC.tabid = sdf.tabid AND TC.colno = sdf.colno)"); //$NON-NLS-1$
+			"select T.tabname, T.tabtype, TC.colname, TC.collength, TC.coltype, TC.extended_id ,sdf.default, sdf.type,"
+				+ " TC.colmin, TC.colmax, T.tabid from informix.systables T LEFT JOIN informix.syscolumns TC ON TC"
+				+ ".tabid = T.tabid LEFT JOIN informix.sysdefaults sdf ON (TC.tabid = sdf.tabid AND TC.colno = sdf"
+				+ ".colno)"); //$NON-NLS-1$
 		if(filterSysTables)
 		{
 			sql.append(" WHERE T.tabid > 99"); //$NON-NLS-1$
@@ -1010,7 +997,6 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			if(filterSysTables)
 			{
 				sql.append(" AND ("); //$NON-NLS-1$
-				
 			}
 			else
 			{
@@ -1028,21 +1014,19 @@ public class InformixJDBCMetaData extends JDBCMetaData
 						sql.append(" OR "); //$NON-NLS-1$
 					}
 					sql.append("T.tabtype='" + type.toCharArray()[0] + "'"); //$NON-NLS-1$ //$NON-NLS-2$
-					
 				}
-				
 			}
 			sql.append(")"); //$NON-NLS-1$
 		}
 		sql.append(" AND (sdf.colno is null OR sdf.colno=TC.colno)"); //$NON-NLS-1$
 		
-		statement.executeQuery(sql.toString(),false);
+		statement.executeQuery(sql.toString(), false);
 	}
 	
-	
-	private void parseResultToMaps(final String schema, final ResultSet rs,
-			final Map<String, List<ColumnMetaData>> columnsMap, final Map<String, TableInfo> tableInfoMap,
-			final Set<String> columnSet) throws Exception
+	private void parseResultToMaps(
+		final String schema, final ResultSet rs,
+		final Map<String, List<ColumnMetaData>> columnsMap, final Map<String, TableInfo> tableInfoMap,
+		final Set<String> columnSet) throws Exception
 	{
 		TableType tableType;
 		TableInfo tableInfo;
@@ -1058,8 +1042,8 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				final String typePrefix = rs.getString("tabtype"); //$NON-NLS-1$
 				final String tabid = rs.getString("tabid"); //$NON-NLS-1$
 				tableType = this.getTableType(typePrefix);
-				tableInfo = new TableInfo(tableType,schema,tableName);
-				tableInfoMap.put(tabid,tableInfo);
+				tableInfo = new TableInfo(tableType, schema, tableName);
+				tableInfoMap.put(tabid, tableInfo);
 			}
 			
 			final String columnName = rs.getString("colname"); //$NON-NLS-1$
@@ -1073,7 +1057,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 			final int columnType = (short)IfxTypes.FromIfxToJDBCType(transformedColType);
 			final DataType columnDataType = DataType.get(columnType);
 			
-			final boolean isAutoIncrement = this.isAutoIncrement(transformedColType,columnDataType);
+			final boolean isAutoIncrement = this.isAutoIncrement(transformedColType, columnDataType);
 			
 			final boolean nullable = this.isNullAllowed(colType);
 			
@@ -1092,7 +1076,6 @@ public class InformixJDBCMetaData extends JDBCMetaData
 					scale = collength % 256;
 					collength = collength / 256;
 				}
-				
 			}
 			else if(columnDataType == DataType.TIMESTAMP)
 			{
@@ -1100,37 +1083,34 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				final int lastQualifier = IfxDateTime.getEndCode((short)collength);
 				
 				collength = (collength - (firstQualifier * 16) - lastQualifier) / 256;
-				
 			}
 			
-			this.addToColumnsMap(columnsMap,tableName,columnName,collength,colDefault,columnDataType,
-					isAutoIncrement,nullable,scale);
-			
+			this.addToColumnsMap(columnsMap, tableName, columnName, collength, colDefault, columnDataType,
+				isAutoIncrement, nullable, scale);
 		}
 	}
 	
-	
-	private void addToColumnsMap(final Map<String, List<ColumnMetaData>> columnsMap, final String tableName,
-			final String columnName, final int collength, final String colDefault, final DataType columnDataType,
-			final boolean isAutoIncrement, final boolean nullable, final int scale)
+	private void addToColumnsMap(
+		final Map<String, List<ColumnMetaData>> columnsMap, final String tableName,
+		final String columnName, final int collength, final String colDefault, final DataType columnDataType,
+		final boolean isAutoIncrement, final boolean nullable, final int scale)
 	{
 		final List<ColumnMetaData> columns;
 		if(columnsMap.containsKey(tableName))
 		{
 			// caption is set to columnName
 			columnsMap.get(tableName).add(
-					new ColumnMetaData(tableName,columnName,columnName,columnDataType,collength,
-							scale,colDefault,nullable,isAutoIncrement));
+				new ColumnMetaData(tableName, columnName, columnName, columnDataType, collength,
+					scale, colDefault, nullable, isAutoIncrement));
 		}
 		else
 		{
 			columns = new ArrayList<>();
-			columns.add(new ColumnMetaData(tableName,columnName,columnName,columnDataType,
-					collength,scale,colDefault,nullable,isAutoIncrement));
-			columnsMap.put(tableName,columns);
+			columns.add(new ColumnMetaData(tableName, columnName, columnName, columnDataType,
+				collength, scale, colDefault, nullable, isAutoIncrement));
+			columnsMap.put(tableName, columns);
 		}
 	}
-	
 	
 	private boolean isAutoIncrement(final short transformedColType, final DataType columnDataType)
 	{
@@ -1138,19 +1118,11 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		if(columnDataType == DataType.INTEGER)
 		{
 			
-			if(transformedColType == IfxTypes.IFX_TYPE_SERIAL
-					|| transformedColType == IfxTypes.IFX_TYPE_SERIAL8)
-			{
-				isAutoIncrement = true;
-			}
-			else
-			{
-				isAutoIncrement = false;
-			}
+			isAutoIncrement = transformedColType == IfxTypes.IFX_TYPE_SERIAL
+				|| transformedColType == IfxTypes.IFX_TYPE_SERIAL8;
 		}
 		return isAutoIncrement;
 	}
-	
 	
 	private String getColumnDefaultValue(final ResultSet rs) throws Exception
 	{
@@ -1164,9 +1136,9 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		catch(final SQLException e)
 		{
 			final String err = "ResultSet cannot return value. defaultType=" + defaultType //$NON-NLS-1$
-					+ " and colDefault=" + colDefault; //$NON-NLS-1$
-			LOGGER.error(err,e);
-			throw new Exception(err,e);
+				+ " and colDefault=" + colDefault; //$NON-NLS-1$
+			LOGGER.error(err, e);
+			throw new Exception(err, e);
 		}
 		
 		if(colDefault != null)
@@ -1186,23 +1158,16 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				else
 				{
 					colDefault = split[1];
-					
 				}
 			}
 		}
 		return colDefault;
 	}
 	
-	
 	private boolean isNullAllowed(final int colType)
 	{
-		if((colType & 0x100) == 256)
-		{
-			return false;
-		}
-		return true;
+		return (colType & 0x100) != 256;
 	}
-	
 	
 	private TableType getTableType(final String typePrefix)
 	{
@@ -1223,12 +1188,12 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		return TableType.OTHER;
 	}
 	
-	
 	@Override
-	public EntityRelationshipModel getEntityRelationshipModel(final ProgressMonitor monitor,
-			final TableInfo... tableInfos) throws DBException
+	public EntityRelationshipModel getEntityRelationshipModel(
+		final ProgressMonitor monitor,
+		final TableInfo... tableInfos) throws DBException
 	{
-		monitor.beginTask("",tableInfos.length); //$NON-NLS-1$
+		monitor.beginTask("", tableInfos.length); //$NON-NLS-1$
 		
 		final EntityRelationshipModel model = new EntityRelationshipModel();
 		
@@ -1256,7 +1221,7 @@ public class InformixJDBCMetaData extends JDBCMetaData
 				final String schema = this.getSchema(this.dataSource);
 				int done = 0;
 				
-				exportedKeys = meta.getExportedKeys(catalog,schema,"%"); //$NON-NLS-1$
+				exportedKeys = meta.getExportedKeys(catalog, schema, "%"); //$NON-NLS-1$
 				
 				String pkTable = null;
 				String fkTable = null;
@@ -1280,10 +1245,11 @@ public class InformixJDBCMetaData extends JDBCMetaData
 					{
 						if(tables.contains(pkTable) && tables.contains(fkTable))
 						{
-							model.add(new EntityRelationship(new Entity(pkTable,pkColumns
-									.toArray(new String[pkColumns.size()]),Cardinality.ONE),
-									new Entity(fkTable,fkColumns.toArray(new String[fkColumns
-											.size()]),Cardinality.MANY)));
+							model.add(new EntityRelationship(
+								new Entity(pkTable, pkColumns
+									.toArray(new String[pkColumns.size()]), Cardinality.ONE),
+								new Entity(fkTable, fkColumns.toArray(new String[fkColumns
+									.size()]), Cardinality.MANY)));
 							pkColumns.clear();
 							fkColumns.clear();
 						}
@@ -1291,23 +1257,21 @@ public class InformixJDBCMetaData extends JDBCMetaData
 					
 					pkColumns.add(exportedKeys.getString("PKCOLUMN_NAME")); //$NON-NLS-1$
 					fkColumns.add(exportedKeys.getString("FKCOLUMN_NAME")); //$NON-NLS-1$
-					
 				}
 				if(pkColumns.size() > 0)
 				{
 					if(tables.contains(pkTable) && tables.contains(fkTable))
 					{
-						model.add(new EntityRelationship(new Entity(pkTable,pkColumns
-								.toArray(new String[pkColumns.size()]),Cardinality.ONE),new Entity(
-								fkTable,fkColumns.toArray(new String[fkColumns.size()]),
-								Cardinality.MANY)));
+						model.add(new EntityRelationship(new Entity(pkTable, pkColumns
+							.toArray(new String[pkColumns.size()]), Cardinality.ONE), new Entity(
+							fkTable, fkColumns.toArray(new String[fkColumns.size()]),
+							Cardinality.MANY)));
 						pkColumns.clear();
 						fkColumns.clear();
 					}
 				}
 				
 				monitor.worked(++done);
-				
 			}
 			finally
 			{
@@ -1320,12 +1284,11 @@ public class InformixJDBCMetaData extends JDBCMetaData
 		}
 		catch(final SQLException e)
 		{
-			throw new DBException(this.dataSource,e);
+			throw new DBException(this.dataSource, e);
 		}
 		
 		monitor.done();
 		
 		return model;
 	}
-	
 }
