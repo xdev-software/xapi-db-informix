@@ -3,7 +3,7 @@
 The XDEV Application Framework provides an abstraction over database dialects as part of its SqlEngine. This module is
 the Database Adapter for Informix which includes the Informix-specific implementation for database access.
 
-## Important Note
+### :information_source: Important Notes
 
 We once wrote this Database Adapter for Informix 3.50.JC9. Apparently, the oldest version of
 this [driver for maven is 4.10.6](https://mvnrepository.com/artifact/com.ibm.informix/jdbc). But this is not compatible
